@@ -5,9 +5,7 @@ import { Server } from "socket.io";
 
 const PORT = process.env.PORT || 4000;
 
-// Em produção, defina FRONTEND_URL nas variáveis de ambiente
-// com o domínio onde o frontend fica publicado (ex: https://meu-map-app.vercel.app)
-const FRONTEND_URL = process.env.FRONTEND_URL || "*";
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
 const app = express();
 app.use(cors({ origin: FRONTEND_URL }));
@@ -22,41 +20,53 @@ const io = new Server(server, {
 });
 
 /**
- * "Base de dados" dos utilizadores ligados neste momento.
- *
- * Optei por manter isto em memória (um Map simples), em vez de usar
- * um SGBD (Postgres/Mongo/etc.), porque:
- *  - os dados são efémeros por natureza — só interessa a posição
- *    "agora" de quem está ligado, não um histórico persistente;
- *  - o requisito é tempo real, não persistência entre reinícios;
- *  - com um único processo Node isto é suficiente. Se um dia for preciso
- *    escalar para vários servidores, trocava-se este Map por Redis
- *    (Redis Pub/Sub ou o adaptador oficial @socket.io/redis-adapter),
- *    que é o caminho natural para partilhar estado entre instâncias.
- *
- * Estrutura de cada entrada: { id, lat, lng, updatedAt }
+ * Mapa que guarda os utilizadores conectados.
+ * Chave: socket.id (string)
+ * Valor: { id, lat, lng, updatedAt }
  */
 const connectedUsers = new Map();
 
+// ============================================================
+// FUNÇÕES AUXILIARES
+// ============================================================
+
+/**
+ * Valida se as coordenadas são números válidos dentro dos limites geográficos.
+ *
+ * @param {*} lat - Latitude a validar.
+ * @param {*} lng - Longitude a validar.
+ * @returns {boolean} `true` se as coordenadas forem válidas.
+ */
+function isValidCoords(lat, lng) {
+  return (
+    typeof lat === "number" &&
+    typeof lng === "number" &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  );
+}
+
+//Emite a lista atualizada de todos os utilizadores para todos os clientes.
 function broadcastUsers() {
   const users = Array.from(connectedUsers.values());
   io.emit("users:update", users);
 }
 
+// EVENTOS SOCKET.IO
 io.on("connection", (socket) => {
   console.log(`[+] Cliente ligado: ${socket.id}`);
 
-  // Assim que alguém se liga, envia-lhe já a lista atual de utilizadores
+  // Envia a lista atual de utilizadores para o novo cliente.
   socket.emit("users:update", Array.from(connectedUsers.values()));
 
-  // O cliente envia a sua posição (lat/lng) sempre que o navegador a atualiza
+  //Evento `location:update`: recebe as coordenadas do cliente e atualiza a sua posição no mapa de utilizadores.
+  
   socket.on("location:update", (coords) => {
-    if (
-      !coords ||
-      typeof coords.lat !== "number" ||
-      typeof coords.lng !== "number"
-    ) {
-      return; // ignora payloads inválidos
+    if (!isValidCoords(coords?.lat, coords?.lng)) {
+      console.warn(`[!] Coordenadas inválidas de ${socket.id}`);
+      return;
     }
 
     connectedUsers.set(socket.id, {
@@ -69,22 +79,21 @@ io.on("connection", (socket) => {
     broadcastUsers();
   });
 
+  //Evento `disconnect`: remove o utilizador do mapa e notifica todos.
   socket.on("disconnect", () => {
     console.log(`[-] Cliente desligado: ${socket.id}`);
     connectedUsers.delete(socket.id);
     broadcastUsers();
   });
 });
-
-app.get("/", (req, res) => {
-  res.send("Map App backend está a correr. Socket.IO pronto para ligações.");
-});
-
-// Endpoint simples de healthcheck, útil para o Render/Railway/etc.
+ //Endpoint de healthcheck para monitorização 
 app.get("/health", (req, res) => {
-  res.json({ status: "ok", connectedUsers: connectedUsers.size });
+  res.json({
+    status: "ok",
+    connectedUsers: connectedUsers.size,
+  });
 });
-
+// INICIALIZAÇÃO
 server.listen(PORT, () => {
   console.log(`Servidor a correr na porta ${PORT}`);
 });

@@ -16,7 +16,9 @@ const io = new Server(server, {
   cors: {
     origin: FRONTEND_URL,
     methods: ["GET", "POST"],
-  },
+  },//2000 corresponde a 2s, estava com problema de desconexao apos saida de alguem
+  pingInterval: 2000,
+  pingTimeout: 2000,
 });
 
 /**

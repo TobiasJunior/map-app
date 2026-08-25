@@ -54,8 +54,9 @@ export default function App() {
       setMyId(socket.id);
     }
     function onDisconnect() {
-      setConnected(false);
-    }
+  setConnected(false);
+  setUsers([]);
+}
     function onUsersUpdate(list) {
       setUsers(list);
     }

@@ -1,0 +1,19 @@
+{
+  "name": "map-app-backend",
+  "version": "1.0.0",
+  "description": "Backend em tempo real para o Map App (Socket.IO)",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
